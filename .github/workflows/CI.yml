@@ -129,7 +129,7 @@ jobs:
       if: ${{ always() && contains(matrix.build, 'cmake') }}
       uses: actions/upload-artifact@v4
       with:
-        name: ci-forensics-${{ github.run_id }}
+        name: ci-forensics-${{ matrix.os }}-${{ matrix.toolchain.compiler }}-${{ matrix.toolchain.version }}-${{ matrix.build }}
         path: artifacts/
 
     - name: test
