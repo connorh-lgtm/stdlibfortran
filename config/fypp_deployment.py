@@ -55,11 +55,15 @@ def pre_process_fypp(args):
     def process_f(file):
         source_file = file
         root = os.path.dirname(file)
-        if not os.path.exists(root+os.sep+'temp'):
-            os.makedirs(root+os.sep+'temp')
+        temp_dir = root+os.sep+'temp'
+        if not os.path.exists(temp_dir):
+            try:
+                os.makedirs(temp_dir)
+            except FileExistsError:
+                pass
         basename = os.path.splitext(os.path.basename(source_file))[0]
         sfx = 'f90' if basename not in C_PREPROCESSED else 'F90'
-        target_file = root+os.sep+'temp' + os.sep + basename + '.' + sfx
+        target_file = temp_dir + os.sep + basename + '.' + sfx
         tool.process_file(source_file, target_file)
     
     Parallel(n_jobs=args.njob)(delayed(process_f)(f) for f in fypp_files)
