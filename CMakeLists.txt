@@ -8,6 +8,10 @@ project(fortran_stdlib
         DESCRIPTION "Community driven and agreed upon de facto standard library for Fortran"
 )
 
+enable_language(Fortran)
+set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mod_files")
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/src/mod_files")
+
 # Read version from file
 file(STRINGS "${PROJECT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 string(REPLACE "." ";" VERSION_LIST ${PROJECT_VERSION})
