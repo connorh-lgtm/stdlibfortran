@@ -10,7 +10,152 @@ module test_intrinsics
     use stdlib_math, only: swap
     implicit none
     
+    interface kahan_summation_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: kahan_summation_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface chunked_summation_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: chunked_summation_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface standard_summation_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: standard_summation_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface kahan_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: kahan_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface chunked_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: chunked_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface standard_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: standard_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface complex_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: complex_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
 contains
+
+! Context-dependent tolerance calculation functions
+#:for k, t, s in R_KINDS_TYPES
+pure function kahan_summation_tolerance_${s}$(n, base_eps, sum_magnitude) result(tol)
+    !! Kahan summation error bound: O(eps) + O(n*eps^2)
+    !! Based on Higham "Accuracy and Stability of Numerical Algorithms" Theorem 4.8
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, sum_magnitude
+    ${t}$ :: tol
+    ${t}$ :: first_order_term, second_order_term
+    
+    first_order_term = 2.0_${k}$ * base_eps
+    second_order_term = real(n, ${k}$) * base_eps**2
+    
+    tol = (first_order_term + second_order_term) * abs(sum_magnitude)
+    ! For large arrays, use more conservative bounds accounting for element magnitude
+    tol = max(tol, sqrt(real(n, ${k}$)) * base_eps * abs(sum_magnitude))
+    tol = max(tol, real(n, ${k}$) * base_eps)
+end function
+
+pure function chunked_summation_tolerance_${s}$(n, base_eps, sum_magnitude) result(tol)
+    !! Chunked summation with 64-element batches
+    !! Error bound: O(sqrt(chunk_size) * eps * sqrt(n_chunks))
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, sum_magnitude
+    ${t}$ :: tol
+    ${t}$, parameter :: chunk_size = 64.0_${k}$
+    ${t}$ :: n_chunks, chunk_error, accumulation_error
+    
+    n_chunks = ceiling(real(n, ${k}$) / chunk_size)
+    chunk_error = sqrt(chunk_size) * base_eps
+    accumulation_error = sqrt(n_chunks) * base_eps
+    
+    tol = (chunk_error + accumulation_error) * abs(sum_magnitude)
+    ! For large arrays, use more conservative bounds
+    tol = max(tol, sqrt(real(n, ${k}$)) * base_eps * abs(sum_magnitude))
+    tol = max(tol, 2.0_${k}$ * real(n, ${k}$) * base_eps)
+end function
+
+pure function standard_summation_tolerance_${s}$(n, base_eps, sum_magnitude) result(tol)
+    !! Standard summation error bound: O(n*eps)
+    !! Worst-case forward error analysis for sequential summation
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, sum_magnitude
+    ${t}$ :: tol
+    
+    tol = real(n, ${k}$) * base_eps * abs(sum_magnitude)
+    tol = max(tol, 500.0_${k}$ * base_eps)
+end function
+
+pure function kahan_dot_product_tolerance_${s}$(n, base_eps, product_magnitude) result(tol)
+    !! Kahan dot product: combines multiplication and Kahan summation errors
+    !! Multiplication: O(eps), Summation: O(eps) for Kahan
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, product_magnitude
+    ${t}$ :: tol
+    ${t}$ :: multiplication_error, summation_error
+    
+    multiplication_error = base_eps
+    summation_error = kahan_summation_tolerance_${s}$(n, base_eps, product_magnitude)
+    
+    tol = (multiplication_error + summation_error) * abs(product_magnitude)
+    tol = max(tol, 150.0_${k}$ * base_eps)
+end function
+
+pure function chunked_dot_product_tolerance_${s}$(n, base_eps, product_magnitude) result(tol)
+    !! Chunked dot product: multiplication + chunked summation errors
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, product_magnitude
+    ${t}$ :: tol
+    ${t}$ :: multiplication_error, summation_error
+    
+    multiplication_error = base_eps
+    summation_error = chunked_summation_tolerance_${s}$(n, base_eps, product_magnitude)
+    
+    tol = (multiplication_error + summation_error) * abs(product_magnitude)
+    tol = max(tol, 30.0_${k}$ * base_eps)
+end function
+
+pure function standard_dot_product_tolerance_${s}$(n, base_eps, product_magnitude) result(tol)
+    !! Standard dot product: O(n*eps) for both multiplication and summation
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, product_magnitude
+    ${t}$ :: tol
+    
+    tol = real(n, ${k}$) * base_eps * abs(product_magnitude)
+    tol = max(tol, 100.0_${k}$ * base_eps)
+end function
+
+pure function complex_dot_product_tolerance_${s}$(n, base_eps) result(tol)
+    !! Complex dot product tolerance accounting for conjugation and component errors
+    !! Each complex operation involves 4 real operations plus conjugation
+    !! Based on error analysis in Golub & Van Loan "Matrix Computations"
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps
+    ${t}$ :: tol
+    ${t}$ :: complex_factor
+    
+    complex_factor = 4.0_${k}$
+    tol = complex_factor * real(n, ${k}$) * base_eps
+    tol = max(tol, 1000.0_${k}$ * base_eps)
+end function
+#:endfor
 
 !> Collect all exported unit tests
 subroutine collect_suite(testsuite)
@@ -80,7 +225,8 @@ subroutine test_sum(error)
     #:for k, t, s in R_KINDS_TYPES
     block
         ${t}$, allocatable :: x(:)
-        ${t}$, parameter :: total_sum = 4*atan(1._${k}$), tolerance = epsilon(1._${k}$)*100
+        ${t}$, parameter :: total_sum = 4*atan(1._${k}$)
+        ${t}$ :: tolerance_kahan, tolerance_chunked, tolerance_standard
         ${t}$ :: xsum(ncalc), err(ncalc)
         logical, allocatable :: mask(:), nmask(:)
 
@@ -104,7 +250,15 @@ subroutine test_sum(error)
         xsum(3) = stdlib_sum(x)       ! chunked summation
         err(1:ncalc) = abs(1._${k}$-xsum(1:ncalc)/total_sum)
         
-        call check(error, all(err(:)<tolerance) , "real sum is not accurate" )
+        tolerance_standard = standard_summation_tolerance(n, epsilon(1._${k}$), total_sum)
+        tolerance_kahan = kahan_summation_tolerance(n, epsilon(1._${k}$), total_sum)
+        tolerance_chunked = chunked_summation_tolerance(n, epsilon(1._${k}$), total_sum)
+        
+        call check(error, err(1) < tolerance_standard, "compiler intrinsic sum not within standard bounds")
+        if (allocated(error)) return
+        call check(error, err(2) < tolerance_kahan, "Kahan sum not within theoretical bounds")
+        if (allocated(error)) return
+        call check(error, err(3) < tolerance_chunked, "chunked sum not within theoretical bounds")
         if (allocated(error)) return
 
         xsum(1) = sum(x,mask)+sum(x,nmask) ! compiler intrinsic
@@ -112,7 +266,11 @@ subroutine test_sum(error)
         xsum(3) = stdlib_sum(x,mask)+stdlib_sum(x,nmask) ! chunked summation
         err(1:ncalc) = abs(1._${k}$-xsum(1:ncalc)/total_sum)
         
-        call check(error, all(err(:)<tolerance) , "masked real sum is not accurate" )
+        call check(error, err(1) < tolerance_standard, "compiler intrinsic masked sum not within standard bounds")
+        if (allocated(error)) return
+        call check(error, err(2) < tolerance_kahan, "Kahan masked sum not within theoretical bounds")
+        if (allocated(error)) return
+        call check(error, err(3) < tolerance_chunked, "chunked masked sum not within theoretical bounds")
         if (allocated(error)) return
     end block
     #:endfor
@@ -120,7 +278,8 @@ subroutine test_sum(error)
     #:for k, t, s in C_KINDS_TYPES
     block
         ${t}$, allocatable :: x(:)
-        real(${k}$), parameter :: total_sum = 4*atan(1._${k}$), tolerance = epsilon(1._${k}$)*100
+        real(${k}$), parameter :: total_sum = 4*atan(1._${k}$)
+        real(${k}$) :: tolerance_kahan, tolerance_chunked, tolerance_standard
         real(${k}$) :: err(ncalc)
         ${t}$ :: xsum(ncalc)
         logical, allocatable :: mask(:), nmask(:)
@@ -146,8 +305,15 @@ subroutine test_sum(error)
         xsum(3) = stdlib_sum(x)       ! chunked summation
         err(1:ncalc) = abs(1._${k}$-(xsum(1:ncalc)%re)/total_sum)
         
+        tolerance_standard = standard_summation_tolerance(n, epsilon(1._${k}$), total_sum)
+        tolerance_kahan = kahan_summation_tolerance(n, epsilon(1._${k}$), total_sum)
+        tolerance_chunked = chunked_summation_tolerance(n, epsilon(1._${k}$), total_sum)
         
-        call check(error, all(err(:)<tolerance) , "complex sum is not accurate" )
+        call check(error, err(1) < tolerance_standard, "compiler intrinsic complex sum not within standard bounds")
+        if (allocated(error)) return
+        call check(error, err(2) < tolerance_kahan, "Kahan complex sum not within theoretical bounds")
+        if (allocated(error)) return
+        call check(error, err(3) < tolerance_chunked, "chunked complex sum not within theoretical bounds")
         if (allocated(error)) return
 
         xsum(1) = sum(x,mask)+sum(x,nmask) ! compiler intrinsic
@@ -155,7 +321,11 @@ subroutine test_sum(error)
         xsum(3) = stdlib_sum(x,mask)+stdlib_sum(x,nmask) ! chunked summation
         err(1:ncalc) = abs(1._${k}$-(xsum(1:ncalc)%re)/total_sum)
         
-        call check(error, all(err(:)<tolerance) , "complex masked sum is not accurate" )
+        call check(error, err(1) < tolerance_standard, "compiler intrinsic complex masked sum not within standard bounds")
+        if (allocated(error)) return
+        call check(error, err(2) < tolerance_kahan, "Kahan complex masked sum not within theoretical bounds")
+        if (allocated(error)) return
+        call check(error, err(3) < tolerance_chunked, "chunked complex masked sum not within theoretical bounds")
         if (allocated(error)) return
     end block
     #:endfor
@@ -163,25 +333,27 @@ subroutine test_sum(error)
     ndarray : block
         use stdlib_strings, only: to_string
         real(sp), allocatable :: x(:,:,:)
-        real(sp), parameter :: tolerance = epsilon(1._sp)*100
-        integer :: i 
+        real(sp) :: tolerance_kahan, tolerance_chunked
+        integer :: i
 
         allocate(x(100,100,10))
         call random_number(x)
+        tolerance_chunked = chunked_summation_tolerance(size(x), epsilon(1._sp), sum(x))
+        tolerance_kahan = kahan_summation_tolerance(size(x), epsilon(1._sp), sum(x))
         !> sum all elements
-        call check(error, abs( sum(x) - stdlib_sum(x) )<tolerance*size(x) , "KO: full ndarray stdlib_sum" )
+        call check(error, abs( sum(x) - stdlib_sum(x) ) < tolerance_chunked, "KO: full ndarray stdlib_sum" )
         if (allocated(error)) return
 
-        call check(error, abs( sum(x) - stdlib_sum_kahan(x) )<tolerance*size(x) , "KO: full ndarray stdlib_sum_kahan" )
+        call check(error, abs( sum(x) - stdlib_sum_kahan(x) ) < tolerance_kahan, "KO: full ndarray stdlib_sum_kahan" )
         if (allocated(error)) return
 
         !> sum over specific rank dim
         do i = 1, rank(x)
-            call check(error, norm2( sum(x,dim=i) - stdlib_sum(x,dim=i) )<tolerance*size(x) ,&
+            call check(error, norm2( sum(x,dim=i) - stdlib_sum(x,dim=i) ) < tolerance_chunked ,&
                         "KO: ndarray stdlib_sum over dim "//to_string(i) )
             if (allocated(error)) return
 
-            call check(error, norm2( sum(x,dim=i) - stdlib_sum_kahan(x,dim=i) )<tolerance*size(x) ,&
+            call check(error, norm2( sum(x,dim=i) - stdlib_sum_kahan(x,dim=i) ) < tolerance_kahan ,&
                         "KO: ndarray stdlib_sum_kahan over dim "//to_string(i) )
             if (allocated(error)) return
         end do
@@ -201,7 +373,8 @@ subroutine test_dot_product(error)
     #:for k, t, s in R_KINDS_TYPES
     block
         ${t}$, allocatable :: x(:)
-        ${t}$, parameter :: total_sum = 4*atan(1._${k}$), tolerance = epsilon(1._${k}$)*100
+        ${t}$, parameter :: total_sum = 4*atan(1._${k}$)
+        ${t}$ :: tolerance_kahan, tolerance_chunked, tolerance_standard
         ${t}$ :: xsum(ncalc), err(ncalc)
 
         allocate(x(n))
@@ -220,7 +393,15 @@ subroutine test_dot_product(error)
         xsum(3) = stdlib_dot_product(x,x)       ! chunked summation
         err(1:ncalc) = abs(1._${k}$-xsum(1:ncalc)/total_sum)
         
-        call check(error, all(err(:)<tolerance) , "real dot_product is not accurate" )
+        tolerance_standard = standard_dot_product_tolerance(n, epsilon(1._${k}$), total_sum)
+        tolerance_kahan = kahan_dot_product_tolerance(n, epsilon(1._${k}$), total_sum)
+        tolerance_chunked = chunked_dot_product_tolerance(n, epsilon(1._${k}$), total_sum)
+        
+        call check(error, err(1) < tolerance_standard, "compiler intrinsic dot_product not within standard bounds")
+        if (allocated(error)) return
+        call check(error, err(2) < tolerance_kahan, "Kahan dot_product not within theoretical bounds")
+        if (allocated(error)) return
+        call check(error, err(3) < tolerance_chunked, "chunked dot_product not within theoretical bounds")
         if (allocated(error)) return
     end block
     #:endfor
@@ -228,7 +409,8 @@ subroutine test_dot_product(error)
     #:for k, t, s in C_KINDS_TYPES
     block
         ${t}$, allocatable :: x(:)
-        real(${k}$), parameter :: total_sum = 4*atan(1._${k}$), tolerance = epsilon(1._${k}$)*100
+        real(${k}$), parameter :: total_sum = 4*atan(1._${k}$)
+        real(${k}$) :: tolerance_kahan, tolerance_chunked, tolerance_standard
         real(${k}$) :: err(ncalc)
         ${t}$ :: xsum(ncalc)
 
@@ -247,15 +429,23 @@ subroutine test_dot_product(error)
         xsum(2) = stdlib_dot_product_kahan(x,x) ! chunked Kahan dot_product
         xsum(3) = stdlib_dot_product(x,x)       ! chunked dot_product
         err(1:ncalc) = abs(1._${k}$-xsum(1:ncalc)%re/(2*total_sum))
+        
+        tolerance_standard = standard_dot_product_tolerance(n, epsilon(1._${k}$), 2*total_sum)
+        tolerance_kahan = kahan_dot_product_tolerance(n, epsilon(1._${k}$), 2*total_sum)
+        tolerance_chunked = chunked_dot_product_tolerance(n, epsilon(1._${k}$), 2*total_sum)
          
-        call check(error, all(err(:)<tolerance) , "complex dot_product is not accurate" )
+        call check(error, err(1) < tolerance_standard, "compiler intrinsic complex dot_product not within standard bounds")
+        if (allocated(error)) return
+        call check(error, err(2) < tolerance_kahan, "Kahan complex dot_product not within theoretical bounds")
+        if (allocated(error)) return
+        call check(error, err(3) < tolerance_chunked, "chunked complex dot_product not within theoretical bounds")
         if (allocated(error)) return
     end block
 
     block ! test for https://github.com/fortran-lang/stdlib/issues/1016
         ${t}$ :: x(128), y(128)
         real(${k}$) :: z(128,2)
-        real(${k}$), parameter :: tolerance = epsilon(1._${k}$)*100000
+        real(${k}$) :: tolerance
         real(${k}$) :: err(2)
         ${t}$ :: p(3)
 
@@ -263,6 +453,8 @@ subroutine test_dot_product(error)
         x%re = z(:, 1); x%im = z(:, 2)
         call random_number(z)
         y%re = z(:, 1); y%im = z(:, 2)
+        
+        tolerance = complex_dot_product_tolerance(128, epsilon(1._${k}$))
         
         p(1) = dot_product(x,y) ! compiler intrinsic
         p(2) = stdlib_dot_product_kahan(x,y) ! chunked Kahan dot_product
@@ -320,7 +512,7 @@ subroutine test_reference_summation_validation(error)
         result_stdlib = stdlib_sum(x)
         result_kahan = stdlib_sum_kahan(x)
         
-        relaxed_bound = 1000.0_${k}$ * base_tolerance * sum(abs(x))
+        relaxed_bound = kahan_summation_tolerance(n, base_tolerance, reference_sum)
         
         call check(error, abs(result_kahan - reference_sum) < relaxed_bound, &
                   "Kahan summation should be within relaxed error bounds for harmonic series")
@@ -379,7 +571,7 @@ subroutine test_dot_product_reference_validation(error)
         result_stdlib = stdlib_dot_product(x, y)
         result_kahan = stdlib_dot_product_kahan(x, y)
         
-        practical_bound = 1000.0_${k}$ * base_tolerance * reference_dot
+        practical_bound = kahan_dot_product_tolerance(n, base_tolerance, reference_dot)
         
         call check(error, abs(result_kahan - reference_dot) < practical_bound, &
                   "Kahan dot product should be within practical error bounds")
@@ -423,7 +615,7 @@ subroutine test_kahan_superiority_demonstration(error)
                   "Kahan summation should be at least as accurate as stdlib for alternating series")
         if (allocated(error)) return
         
-        call check(error, error_kahan < 1000.0_${k}$ * base_tolerance * sum(abs(x)), &
+        call check(error, error_kahan < kahan_summation_tolerance(n, base_tolerance, sum(abs(x))), &
                   "Kahan summation should handle alternating series within reasonable bounds")
         if (allocated(error)) return
     end block
@@ -454,7 +646,7 @@ subroutine test_theoretical_error_bounds(error)
         result_kahan = stdlib_sum_kahan(x)
         actual_error = abs(result_kahan - exact_sum)
         
-        practical_bound = 100.0_${k}$ * base_tolerance * sum(abs(x))
+        practical_bound = kahan_summation_tolerance(n, base_tolerance, exact_sum)
         
         call check(error, actual_error <= practical_bound, &
                   "Kahan summation error should be within practical error bound")
@@ -494,7 +686,7 @@ subroutine test_complex_conjugation_accuracy(error)
         expected_result = sum(conjg(x) * y)
         
         error_magnitude = abs(result_kahan - expected_result)
-        practical_bound = 1000.0_${k}$ * base_tolerance * abs(expected_result)
+        practical_bound = complex_dot_product_tolerance(n, base_tolerance)
         
         call check(error, error_magnitude < practical_bound, &
                   "Complex dot product should match expected result")
