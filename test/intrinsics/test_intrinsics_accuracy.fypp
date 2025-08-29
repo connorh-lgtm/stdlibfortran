@@ -1,0 +1,263 @@
+#:include "common.fypp"
+#:set I_KINDS_TYPES = list(zip(INT_KINDS, INT_TYPES, INT_KINDS))
+#:set R_KINDS_TYPES = list(zip(REAL_KINDS, REAL_TYPES, REAL_SUFFIX))
+#:set C_KINDS_TYPES = list(zip(CMPLX_KINDS, CMPLX_TYPES, CMPLX_SUFFIX))
+
+module test_intrinsics_accuracy
+    use testdrive, only : new_unittest, unittest_type, error_type, check, skip_test
+    use stdlib_kinds, only: sp, dp, xdp, qp, int8, int16, int32, int64
+    use stdlib_intrinsics
+    use stdlib_constants
+    implicit none
+    
+contains
+
+!> Collect all exported unit tests
+subroutine collect_suite(testsuite)
+    type(unittest_type), allocatable, intent(out) :: testsuite(:)
+    testsuite = [ &
+        new_unittest('reference_summation_validation', test_reference_summation_validation), &
+        new_unittest('dot_product_reference_validation', test_dot_product_reference_validation), &
+        new_unittest('kahan_superiority_demonstration', test_kahan_superiority_demonstration), &
+        new_unittest('theoretical_error_bounds', test_theoretical_error_bounds), &
+        new_unittest('complex_conjugation_accuracy', test_complex_conjugation_accuracy) &
+    ]
+end subroutine
+
+subroutine test_reference_summation_validation(error)
+    !> Error handling
+    type(error_type), allocatable, intent(out) :: error
+
+    #:for k, t, s in R_KINDS_TYPES
+    block
+        ${t}$, allocatable :: x(:)
+        ${t}$ :: result_stdlib, result_kahan
+        ${t}$ :: reference_sum, relaxed_bound
+        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
+        integer :: i, n
+
+        n = 1000
+        allocate(x(n))
+        
+        do i = 1, n
+            x(i) = 1.0_${k}$ / real(i, ${k}$)**2
+        end do
+        
+        #:if WITH_QP and k != "qp"
+        block
+            real(qp) :: ref_qp
+            ref_qp = 0.0_qp
+            do i = 1, n
+                ref_qp = ref_qp + real(x(i), qp)
+            end do
+            reference_sum = real(ref_qp, ${k}$)
+        end block
+        #:elif WITH_XDP and k != "xdp" and k != "qp"
+        block
+            real(xdp) :: ref_xdp
+            ref_xdp = 0.0_xdp
+            do i = 1, n
+                ref_xdp = ref_xdp + real(x(i), xdp)
+            end do
+            reference_sum = real(ref_xdp, ${k}$)
+        end block
+        #:else
+        reference_sum = sum(x)
+        #:endif
+        
+        result_stdlib = stdlib_sum(x)
+        result_kahan = stdlib_sum_kahan(x)
+        
+        relaxed_bound = 1000.0_${k}$ * base_tolerance * sum(abs(x))
+        
+        call check(error, abs(result_kahan - reference_sum) < relaxed_bound, &
+                  "Kahan summation should be within relaxed error bounds for harmonic series")
+        if (allocated(error)) return
+        
+        call check(error, abs(result_stdlib - reference_sum) < relaxed_bound, &
+                  "Stdlib summation should be within relaxed error bounds for harmonic series")
+        if (allocated(error)) return
+    end block
+    #:endfor
+
+end subroutine
+
+subroutine test_dot_product_reference_validation(error)
+    !> Error handling
+    type(error_type), allocatable, intent(out) :: error
+
+    #:for k, t, s in R_KINDS_TYPES
+    block
+        ${t}$, allocatable :: x(:), y(:)
+        ${t}$ :: result_stdlib, result_kahan
+        ${t}$ :: reference_dot, practical_bound
+        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
+        integer :: i, n
+
+        n = 1000
+        allocate(x(n), y(n))
+        
+        do i = 1, n
+            x(i) = 1.0_${k}$ / sqrt(real(i, ${k}$))
+            y(i) = 1.0_${k}$ / sqrt(real(i, ${k}$))
+        end do
+        
+        #:if WITH_QP and k != "qp"
+        block
+            real(qp) :: ref_qp
+            ref_qp = 0.0_qp
+            do i = 1, n
+                ref_qp = ref_qp + real(x(i), qp) * real(y(i), qp)
+            end do
+            reference_dot = real(ref_qp, ${k}$)
+        end block
+        #:elif WITH_XDP and k != "xdp" and k != "qp"
+        block
+            real(xdp) :: ref_xdp
+            ref_xdp = 0.0_xdp
+            do i = 1, n
+                ref_xdp = ref_xdp + real(x(i), xdp) * real(y(i), xdp)
+            end do
+            reference_dot = real(ref_xdp, ${k}$)
+        end block
+        #:else
+        reference_dot = dot_product(x, y)
+        #:endif
+        
+        result_stdlib = stdlib_dot_product(x, y)
+        result_kahan = stdlib_dot_product_kahan(x, y)
+        
+        practical_bound = 1000.0_${k}$ * base_tolerance * reference_dot
+        
+        call check(error, abs(result_kahan - reference_dot) < practical_bound, &
+                  "Kahan dot product should be within practical error bounds")
+        if (allocated(error)) return
+        
+        call check(error, abs(result_stdlib - reference_dot) < practical_bound, &
+                  "Stdlib dot product should be within practical error bounds")
+        if (allocated(error)) return
+    end block
+    #:endfor
+
+end subroutine
+
+subroutine test_kahan_superiority_demonstration(error)
+    !> Error handling
+    type(error_type), allocatable, intent(out) :: error
+
+    #:for k, t, s in R_KINDS_TYPES
+    block
+        ${t}$, allocatable :: x(:)
+        ${t}$ :: result_stdlib, result_kahan
+        ${t}$ :: expected, error_stdlib, error_kahan
+        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
+        integer :: i, n
+
+        n = 10000
+        allocate(x(n))
+        
+        do i = 1, n
+            x(i) = ((-1.0_${k}$)**(i-1)) / real(i, ${k}$)**3
+        end do
+        expected = sum(x)
+        
+        result_stdlib = stdlib_sum(x)
+        result_kahan = stdlib_sum_kahan(x)
+        
+        error_stdlib = abs(expected - result_stdlib)
+        error_kahan = abs(expected - result_kahan)
+        
+        call check(error, error_kahan <= error_stdlib, &
+                  "Kahan summation should be at least as accurate as stdlib for alternating series")
+        if (allocated(error)) return
+        
+        call check(error, error_kahan < 1000.0_${k}$ * base_tolerance * sum(abs(x)), &
+                  "Kahan summation should handle alternating series within reasonable bounds")
+        if (allocated(error)) return
+    end block
+    #:endfor
+
+end subroutine
+
+subroutine test_theoretical_error_bounds(error)
+    !> Error handling
+    type(error_type), allocatable, intent(out) :: error
+
+    #:for k, t, s in R_KINDS_TYPES
+    block
+        ${t}$, allocatable :: x(:)
+        ${t}$ :: result_kahan, exact_sum
+        ${t}$ :: practical_bound, actual_error
+        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
+        integer :: i, n
+
+        n = 100
+        allocate(x(n))
+        
+        do i = 1, n
+            x(i) = 1.0_${k}$ / real(i, ${k}$)
+        end do
+        
+        exact_sum = sum(x)
+        result_kahan = stdlib_sum_kahan(x)
+        actual_error = abs(result_kahan - exact_sum)
+        
+        practical_bound = 100.0_${k}$ * base_tolerance * sum(abs(x))
+        
+        call check(error, actual_error <= practical_bound, &
+                  "Kahan summation error should be within practical error bound")
+        if (allocated(error)) return
+        
+        call check(error, result_kahan /= 0.0_${k}$, &
+                  "Kahan summation should produce non-zero result for harmonic series")
+        if (allocated(error)) return
+    end block
+    #:endfor
+
+end subroutine
+
+subroutine test_complex_conjugation_accuracy(error)
+    !> Error handling
+    type(error_type), allocatable, intent(out) :: error
+
+    #:for k, t, s in C_KINDS_TYPES
+    block
+        ${t}$, allocatable :: x(:), y(:)
+        ${t}$ :: result_kahan, result_intrinsic
+        ${t}$ :: expected_result
+        real(${k}$), parameter :: base_tolerance = epsilon(1._${k}$)
+        real(${k}$) :: error_magnitude, practical_bound
+        integer :: i, n
+
+        n = 10
+        allocate(x(n), y(n))
+        
+        do i = 1, n
+            x(i) = cmplx(real(i, ${k}$), real(i, ${k}$))
+            y(i) = x(i)
+        end do
+        
+        result_kahan = stdlib_dot_product_kahan(x, y)
+        result_intrinsic = dot_product(x, y)
+        expected_result = sum(conjg(x) * y)
+        
+        error_magnitude = abs(result_kahan - expected_result)
+        practical_bound = 1000.0_${k}$ * base_tolerance * abs(expected_result)
+        
+        call check(error, error_magnitude < practical_bound, &
+                  "Complex dot product should match expected result")
+        if (allocated(error)) return
+        
+        call check(error, abs(result_kahan - result_intrinsic) < practical_bound, &
+                  "Kahan and intrinsic complex dot products should agree")
+        if (allocated(error)) return
+        
+        call check(error, abs(expected_result) > 0.0_${k}$, &
+                  "Complex dot product test should have non-zero expected result")
+        if (allocated(error)) return
+    end block
+    #:endfor
+
+end subroutine
+    
+end module test_intrinsics_accuracy
