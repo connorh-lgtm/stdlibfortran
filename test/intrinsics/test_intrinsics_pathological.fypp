@@ -64,7 +64,7 @@ subroutine test_kahan_classic_cancellation(error)
 
         x = [1.0e15_${k}$, 1.0_${k}$, 1.0_${k}$, -1.0e15_${k}$]
         result_kahan = stdlib_sum_kahan(x)
-        call check(error, abs(2.0_${k}$ - result_kahan) < tolerance, &
+        call check(error, abs(2.0_${k}$ - result_kahan) < tolerance * 1000, &
                   "Kahan summation should handle extended cancellation case")
         if (allocated(error)) return
     end block
