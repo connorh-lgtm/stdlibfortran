@@ -52,7 +52,7 @@ jobs:
         python-version: 3.x
 
     - name: Install fypp
-      run: pip install --upgrade fypp ninja
+      run: pip install --upgrade fypp ninja joblib
 
     - name: Setup Fortran compiler
       uses: fortran-lang/setup-fortran@v1.6.2
