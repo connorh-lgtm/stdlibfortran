@@ -10,9 +10,6 @@ module test_intrinsics_pathological
     use stdlib_math, only: swap
     implicit none
     
-    logical, parameter :: has_xdp = WITH_XDP
-    logical, parameter :: has_qp = WITH_QP
-    
 contains
 
 !> Collect all exported unit tests

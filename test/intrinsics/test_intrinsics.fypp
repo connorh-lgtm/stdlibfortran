@@ -10,9 +10,6 @@ module test_intrinsics
     use stdlib_math, only: swap
     implicit none
     
-    logical, parameter :: has_xdp = WITH_XDP
-    logical, parameter :: has_qp = WITH_QP
-    
     interface kahan_summation_tolerance
         #:for k, t, s in R_KINDS_TYPES
         module procedure :: kahan_summation_tolerance_${s}$
