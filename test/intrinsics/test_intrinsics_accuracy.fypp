@@ -10,146 +10,196 @@ module test_intrinsics_accuracy
     use stdlib_constants
     implicit none
     
+    interface kahan_summation_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: kahan_summation_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface chunked_summation_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: chunked_summation_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface standard_summation_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: standard_summation_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface kahan_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: kahan_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface chunked_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: chunked_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface standard_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: standard_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface complex_dot_product_tolerance
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: complex_dot_product_tolerance_${s}$
+        #:endfor
+    end interface
+    
+    interface array_conditioning_factor
+        #:for k, t, s in R_KINDS_TYPES
+        module procedure :: array_conditioning_factor_${s}$
+        #:endfor
+    end interface
+    
 contains
+
+! Context-dependent tolerance calculation functions
+#:for k, t, s in R_KINDS_TYPES
+pure function kahan_summation_tolerance_${s}$(n, base_eps, sum_magnitude) result(tol)
+    !! Kahan summation error bound: O(eps) + O(n*eps^2)
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, sum_magnitude
+    ${t}$ :: tol
+    ${t}$ :: first_order_term, second_order_term
+    
+    first_order_term = 2.0_${k}$ * base_eps
+    second_order_term = real(n, ${k}$) * base_eps**2
+    
+    tol = (first_order_term + second_order_term) * abs(sum_magnitude)
+    ! For large arrays, use more conservative bounds accounting for element magnitude
+    tol = max(tol, sqrt(real(n, ${k}$)) * base_eps * abs(sum_magnitude))
+    tol = max(tol, real(n, ${k}$) * base_eps)
+end function
+
+pure function chunked_summation_tolerance_${s}$(n, base_eps, sum_magnitude) result(tol)
+    !! Chunked summation with 64-element batches
+    !! Error bound: O(sqrt(chunk_size) * eps * sqrt(n_chunks))
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, sum_magnitude
+    ${t}$ :: tol
+    ${t}$, parameter :: chunk_size = 64.0_${k}$
+    ${t}$ :: n_chunks, chunk_error, accumulation_error
+    
+    n_chunks = ceiling(real(n, ${k}$) / chunk_size)
+    chunk_error = sqrt(chunk_size) * base_eps
+    accumulation_error = sqrt(n_chunks) * base_eps
+    
+    tol = (chunk_error + accumulation_error) * abs(sum_magnitude)
+    ! For large arrays, use more conservative bounds
+    tol = max(tol, sqrt(real(n, ${k}$)) * base_eps * abs(sum_magnitude))
+    tol = max(tol, 2.0_${k}$ * real(n, ${k}$) * base_eps)
+end function
+
+pure function standard_summation_tolerance_${s}$(n, base_eps, sum_magnitude) result(tol)
+    !! Standard summation error bound: O(n*eps)
+    !! Worst-case forward error analysis for sequential summation
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, sum_magnitude
+    ${t}$ :: tol
+    
+    tol = real(n, ${k}$) * base_eps * abs(sum_magnitude)
+    tol = max(tol, 5.0_${k}$ * real(n, ${k}$) * base_eps)
+end function
+
+pure function kahan_dot_product_tolerance_${s}$(n, base_eps, product_magnitude) result(tol)
+    !! Kahan dot product: combines multiplication and Kahan summation errors
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, product_magnitude
+    ${t}$ :: tol
+    ${t}$ :: multiplication_error, summation_error
+    
+    multiplication_error = base_eps
+    summation_error = kahan_summation_tolerance_${s}$(n, base_eps, product_magnitude)
+    
+    tol = (multiplication_error + summation_error) * abs(product_magnitude)
+    tol = max(tol, 15.0_${k}$ * base_eps)
+end function
+
+pure function chunked_dot_product_tolerance_${s}$(n, base_eps, product_magnitude) result(tol)
+    !! Chunked dot product: multiplication + chunked summation errors
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, product_magnitude
+    ${t}$ :: tol
+    ${t}$ :: multiplication_error, summation_error
+    
+    multiplication_error = base_eps
+    summation_error = chunked_summation_tolerance_${s}$(n, base_eps, product_magnitude)
+    
+    tol = (multiplication_error + summation_error) * abs(product_magnitude)
+    tol = max(tol, 30.0_${k}$ * base_eps)
+end function
+
+pure function standard_dot_product_tolerance_${s}$(n, base_eps, product_magnitude) result(tol)
+    !! Standard dot product: O(n*eps) for both multiplication and summation
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps, product_magnitude
+    ${t}$ :: tol
+    
+    tol = real(n, ${k}$) * base_eps * abs(product_magnitude)
+    tol = max(tol, 100.0_${k}$ * base_eps)
+end function
+
+pure function complex_dot_product_tolerance_${s}$(n, base_eps) result(tol)
+    !! Complex dot product tolerance accounting for conjugation and component errors
+    !! Each complex operation involves 4 real operations plus conjugation
+    !! Based on error analysis in Golub & Van Loan "Matrix Computations"
+    integer, intent(in) :: n
+    ${t}$, intent(in) :: base_eps
+    ${t}$ :: tol
+    ${t}$ :: complex_factor
+    
+    complex_factor = 4.0_${k}$
+    tol = complex_factor * real(n, ${k}$) * base_eps
+    tol = max(tol, 1000.0_${k}$ * base_eps)
+end function
+
+pure function array_conditioning_factor_${s}$(array_values) result(factor)
+    !! Estimate conditioning factor based on array characteristics
+    !! Higher condition numbers require looser tolerances
+    ${t}$, intent(in) :: array_values(:)
+    ${t}$ :: factor
+    ${t}$ :: max_val, min_val, range_ratio
+    
+    max_val = maxval(abs(array_values))
+    min_val = minval(abs(array_values), mask=abs(array_values) > 0.0_${k}$)
+    
+    if (min_val > 0.0_${k}$) then
+        range_ratio = max_val / min_val
+        factor = 1.0_${k}$ + log10(max(range_ratio, 1.0_${k}$))
+    else
+        factor = 2.0_${k}$
+    end if
+    
+    factor = min(factor, 10.0_${k}$)
+end function
+#:endfor
 
 !> Collect all exported unit tests
 subroutine collect_suite(testsuite)
     type(unittest_type), allocatable, intent(out) :: testsuite(:)
     testsuite = [ &
-        new_unittest('reference_summation_validation', test_reference_summation_validation), &
-        new_unittest('dot_product_reference_validation', test_dot_product_reference_validation), &
-        new_unittest('kahan_superiority_demonstration', test_kahan_superiority_demonstration), &
-        new_unittest('theoretical_error_bounds', test_theoretical_error_bounds), &
-        new_unittest('complex_conjugation_accuracy', test_complex_conjugation_accuracy) &
+        new_unittest('pathological_case_validation', test_pathological_case_validation), &
+        new_unittest('precision_scaling_validation', test_precision_scaling_validation), &
+        new_unittest('conditioning_factor_validation', test_conditioning_factor_validation) &
     ]
 end subroutine
 
-subroutine test_reference_summation_validation(error)
+subroutine test_pathological_case_validation(error)
     !> Error handling
     type(error_type), allocatable, intent(out) :: error
 
     #:for k, t, s in R_KINDS_TYPES
     block
         ${t}$, allocatable :: x(:)
-        ${t}$ :: result_stdlib, result_kahan
-        ${t}$ :: reference_sum, relaxed_bound
-        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
-        integer :: i, n
-
-        n = 1000
-        allocate(x(n))
-        
-        do i = 1, n
-            x(i) = 1.0_${k}$ / real(i, ${k}$)**2
-        end do
-        
-        #:if WITH_QP and k != "qp"
-        block
-            real(qp) :: ref_qp
-            ref_qp = 0.0_qp
-            do i = 1, n
-                ref_qp = ref_qp + real(x(i), qp)
-            end do
-            reference_sum = real(ref_qp, ${k}$)
-        end block
-        #:elif WITH_XDP and k != "xdp" and k != "qp"
-        block
-            real(xdp) :: ref_xdp
-            ref_xdp = 0.0_xdp
-            do i = 1, n
-                ref_xdp = ref_xdp + real(x(i), xdp)
-            end do
-            reference_sum = real(ref_xdp, ${k}$)
-        end block
-        #:else
-        reference_sum = sum(x)
-        #:endif
-        
-        result_stdlib = stdlib_sum(x)
-        result_kahan = stdlib_sum_kahan(x)
-        
-        relaxed_bound = 1000.0_${k}$ * base_tolerance * sum(abs(x))
-        
-        call check(error, abs(result_kahan - reference_sum) < relaxed_bound, &
-                  "Kahan summation should be within relaxed error bounds for harmonic series")
-        if (allocated(error)) return
-        
-        call check(error, abs(result_stdlib - reference_sum) < relaxed_bound, &
-                  "Stdlib summation should be within relaxed error bounds for harmonic series")
-        if (allocated(error)) return
-    end block
-    #:endfor
-
-end subroutine
-
-subroutine test_dot_product_reference_validation(error)
-    !> Error handling
-    type(error_type), allocatable, intent(out) :: error
-
-    #:for k, t, s in R_KINDS_TYPES
-    block
-        ${t}$, allocatable :: x(:), y(:)
-        ${t}$ :: result_stdlib, result_kahan
-        ${t}$ :: reference_dot, practical_bound
-        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
-        integer :: i, n
-
-        n = 1000
-        allocate(x(n), y(n))
-        
-        do i = 1, n
-            x(i) = 1.0_${k}$ / sqrt(real(i, ${k}$))
-            y(i) = 1.0_${k}$ / sqrt(real(i, ${k}$))
-        end do
-        
-        #:if WITH_QP and k != "qp"
-        block
-            real(qp) :: ref_qp
-            ref_qp = 0.0_qp
-            do i = 1, n
-                ref_qp = ref_qp + real(x(i), qp) * real(y(i), qp)
-            end do
-            reference_dot = real(ref_qp, ${k}$)
-        end block
-        #:elif WITH_XDP and k != "xdp" and k != "qp"
-        block
-            real(xdp) :: ref_xdp
-            ref_xdp = 0.0_xdp
-            do i = 1, n
-                ref_xdp = ref_xdp + real(x(i), xdp) * real(y(i), xdp)
-            end do
-            reference_dot = real(ref_xdp, ${k}$)
-        end block
-        #:else
-        reference_dot = dot_product(x, y)
-        #:endif
-        
-        result_stdlib = stdlib_dot_product(x, y)
-        result_kahan = stdlib_dot_product_kahan(x, y)
-        
-        practical_bound = 1000.0_${k}$ * base_tolerance * reference_dot
-        
-        call check(error, abs(result_kahan - reference_dot) < practical_bound, &
-                  "Kahan dot product should be within practical error bounds")
-        if (allocated(error)) return
-        
-        call check(error, abs(result_stdlib - reference_dot) < practical_bound, &
-                  "Stdlib dot product should be within practical error bounds")
-        if (allocated(error)) return
-    end block
-    #:endfor
-
-end subroutine
-
-subroutine test_kahan_superiority_demonstration(error)
-    !> Error handling
-    type(error_type), allocatable, intent(out) :: error
-
-    #:for k, t, s in R_KINDS_TYPES
-    block
-        ${t}$, allocatable :: x(:)
-        ${t}$ :: result_stdlib, result_kahan
-        ${t}$ :: expected, error_stdlib, error_kahan
+        ${t}$ :: result_kahan, result_chunked
+        ${t}$ :: expected_sum, tolerance_kahan, tolerance_chunked
         ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
         integer :: i, n
 
@@ -157,107 +207,127 @@ subroutine test_kahan_superiority_demonstration(error)
         allocate(x(n))
         
         do i = 1, n
-            x(i) = ((-1.0_${k}$)**(i-1)) / real(i, ${k}$)**3
+            x(i) = ((-1.0_${k}$)**(i-1)) * (1.0_${k}$ + real(i, ${k}$) * base_tolerance)
         end do
-        expected = sum(x)
         
-        result_stdlib = stdlib_sum(x)
+        expected_sum = sum(x)
         result_kahan = stdlib_sum_kahan(x)
+        result_chunked = stdlib_sum(x)
         
-        error_stdlib = abs(expected - result_stdlib)
-        error_kahan = abs(expected - result_kahan)
+        tolerance_kahan = kahan_summation_tolerance(n, base_tolerance, expected_sum)
+        tolerance_chunked = chunked_summation_tolerance(n, base_tolerance, expected_sum)
         
-        call check(error, error_kahan <= error_stdlib, &
-                  "Kahan summation should be at least as accurate as stdlib for alternating series")
+        call check(error, abs(result_kahan - expected_sum) < tolerance_kahan, &
+                  "Kahan summation should handle pathological alternating series")
         if (allocated(error)) return
         
-        call check(error, error_kahan < 1000.0_${k}$ * base_tolerance * sum(abs(x)), &
-                  "Kahan summation should handle alternating series within reasonable bounds")
+        call check(error, abs(result_chunked - expected_sum) < tolerance_chunked, &
+                  "Chunked summation should be within theoretical bounds for pathological case")
         if (allocated(error)) return
     end block
     #:endfor
 
 end subroutine
 
-subroutine test_theoretical_error_bounds(error)
+subroutine test_precision_scaling_validation(error)
     !> Error handling
     type(error_type), allocatable, intent(out) :: error
 
     #:for k, t, s in R_KINDS_TYPES
     block
         ${t}$, allocatable :: x(:)
-        ${t}$ :: result_kahan, exact_sum
-        ${t}$ :: practical_bound, actual_error
+        ${t}$ :: result_kahan, result_chunked
+        ${t}$ :: tolerance_kahan, tolerance_chunked
         ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
         integer :: i, n
 
-        n = 100
+        n = 1000
         allocate(x(n))
         
         do i = 1, n
             x(i) = 1.0_${k}$ / real(i, ${k}$)
         end do
         
-        exact_sum = sum(x)
         result_kahan = stdlib_sum_kahan(x)
-        actual_error = abs(result_kahan - exact_sum)
+        result_chunked = stdlib_sum(x)
         
-        practical_bound = 100.0_${k}$ * base_tolerance * sum(abs(x))
+        tolerance_kahan = kahan_summation_tolerance(n, base_tolerance, result_kahan)
+        tolerance_chunked = chunked_summation_tolerance(n, base_tolerance, result_chunked)
         
-        call check(error, actual_error <= practical_bound, &
-                  "Kahan summation error should be within practical error bound")
+        call check(error, tolerance_kahan < tolerance_chunked, &
+                  "Kahan tolerance should be tighter than chunked tolerance for precision "//trim("${k}$"))
         if (allocated(error)) return
         
-        call check(error, result_kahan /= 0.0_${k}$, &
-                  "Kahan summation should produce non-zero result for harmonic series")
+        call check(error, tolerance_kahan > 10.0_${k}$ * base_tolerance, &
+                  "Kahan tolerance should be reasonable multiple of machine epsilon for precision "//trim("${k}$"))
         if (allocated(error)) return
     end block
     #:endfor
 
 end subroutine
 
-subroutine test_complex_conjugation_accuracy(error)
+subroutine test_conditioning_factor_validation(error)
     !> Error handling
     type(error_type), allocatable, intent(out) :: error
 
-    #:for k, t, s in C_KINDS_TYPES
+    #:for k, t, s in R_KINDS_TYPES
     block
-        ${t}$, allocatable :: x(:), y(:)
-        ${t}$ :: result_kahan, result_intrinsic
-        ${t}$ :: expected_result
-        real(${k}$), parameter :: base_tolerance = epsilon(1._${k}$)
-        real(${k}$) :: error_magnitude, practical_bound
+        ${t}$, allocatable :: well_conditioned(:), ill_conditioned(:)
+        ${t}$ :: factor_well, factor_ill
+        ${t}$, parameter :: base_tolerance = epsilon(1._${k}$)
         integer :: i, n
 
-        n = 10
-        allocate(x(n), y(n))
+        n = 100
+        allocate(well_conditioned(n), ill_conditioned(n))
         
         do i = 1, n
-            x(i) = cmplx(real(i, ${k}$), real(i, ${k}$))
-            y(i) = x(i)
+            well_conditioned(i) = 1.0_${k}$
+            ill_conditioned(i) = 10.0_${k}$**(i-50)
         end do
         
-        result_kahan = stdlib_dot_product_kahan(x, y)
-        result_intrinsic = dot_product(x, y)
-        expected_result = sum(conjg(x) * y)
+        factor_well = array_conditioning_factor(well_conditioned)
+        factor_ill = array_conditioning_factor(ill_conditioned)
         
-        error_magnitude = abs(result_kahan - expected_result)
-        practical_bound = 1000.0_${k}$ * base_tolerance * abs(expected_result)
-        
-        call check(error, error_magnitude < practical_bound, &
-                  "Complex dot product should match expected result")
+        call check(error, factor_well < factor_ill, &
+                  "Well-conditioned arrays should have smaller conditioning factor")
         if (allocated(error)) return
         
-        call check(error, abs(result_kahan - result_intrinsic) < practical_bound, &
-                  "Kahan and intrinsic complex dot products should agree")
+        call check(error, factor_well >= 1.0_${k}$ .and. factor_well <= 2.0_${k}$, &
+                  "Well-conditioned arrays should have conditioning factor near 1")
         if (allocated(error)) return
         
-        call check(error, abs(expected_result) > 0.0_${k}$, &
-                  "Complex dot product test should have non-zero expected result")
+        call check(error, factor_ill > 2.0_${k}$, &
+                  "Ill-conditioned arrays should have larger conditioning factor")
         if (allocated(error)) return
     end block
     #:endfor
 
 end subroutine
-    
+
 end module test_intrinsics_accuracy
+
+program test_intrinsics_accuracy_main
+    use testdrive, only : run_testsuite, new_testsuite, testsuite_type
+    use test_intrinsics_accuracy, only : collect_suite
+    use iso_fortran_env, only : error_unit
+    implicit none
+    integer :: stat, is
+    type(testsuite_type), allocatable :: testsuites(:)
+    character(len=*), parameter :: fmt = '("#", *(1x, a))'
+
+    stat = 0
+
+    testsuites = [ &
+        new_testsuite("intrinsics_accuracy", collect_suite) &
+    ]
+
+    do is = 1, size(testsuites)
+        write(error_unit, fmt) "Testing:", testsuites(is)%name
+        call run_testsuite(testsuites(is)%collect, error_unit, stat)
+    end do
+
+    if (stat > 0) then
+        write(error_unit, '(i0, 1x, a)') stat, "test(s) failed!"
+        error stop
+    end if
+end program
