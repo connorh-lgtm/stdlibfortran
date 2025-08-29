@@ -80,58 +80,6 @@ jobs:
       if: ${{ failure() && contains(matrix.build, 'cmake') }}
       run: cmake --build ${{ env.BUILD_DIR }} --verbose --parallel 1
 
-    - name: Env & versions
-      if: ${{ contains(matrix.build, 'cmake') }}
-      run: |
-        set -euxo pipefail
-        echo "=== Versions ==="
-        python3 --version || true
-        gfortran --version || true
-        python3 -c "import importlib, numpy; print('numpy', numpy.__version__); print('fypp', importlib.metadata.version('fypp'))" || true
-        echo "FC=${FC:-unset}"
-        echo "FFLAGS=${FFLAGS:-unset}"
-        echo "PWD=$(pwd)"
-        echo "=== Pre-state ==="
-        find . -maxdepth 3 -type d -name "mod_files" -print || true
-        find src -name "*.mod" -print || true
-
-    - name: Run fypp (split flags)
-      if: ${{ contains(matrix.build, 'cmake') }}
-      run: |
-        set -euxo pipefail
-        python3 config/fypp_deployment.py --with_xdp -v
-        python3 config/fypp_deployment.py --with_qp -v
-        echo "=== Post-fypp state ==="
-        find src -name "*.F90" -o -name "*.f90" -o -name "*.mod" | sort | sed 's/^/FOUND: /'
-
-    - name: Configure & build
-      if: ${{ contains(matrix.build, 'cmake') }}
-      run: |
-        set -euxo pipefail
-        cmake -S . -B ${{ env.BUILD_DIR }} -G Ninja -DCMAKE_Fortran_MODULE_DIRECTORY=${GITHUB_WORKSPACE}/src/mod_files
-        ninja -C ${{ env.BUILD_DIR }} -v
-
-    - name: Focus failing test
-      if: ${{ contains(matrix.build, 'cmake') }}
-      run: |
-        set -euxo pipefail
-        export FFLAGS="${FFLAGS:-} -fno-fast-math -fno-unsafe-math-optimizations -fprotect-parens"
-        ctest --test-dir ${{ env.BUILD_DIR }} -R "intrinsics_pathological" -V --output-on-failure
-
-    - name: Upload forensics
-      if: ${{ always() && contains(matrix.build, 'cmake') }}
-      run: |
-        tar czf build_artifacts.tgz src/mod_files || true
-        mkdir -p artifacts && mv build_artifacts.tgz artifacts/ || true
-      shell: bash
-
-    - name: Upload artifacts
-      if: ${{ always() && contains(matrix.build, 'cmake') }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: ci-forensics-${{ matrix.os }}-${{ matrix.toolchain.compiler }}-${{ matrix.toolchain.version }}-${{ matrix.build }}
-        path: artifacts/
-
     - name: test
       if: ${{ contains(matrix.build, 'cmake') }}
       run: >-
