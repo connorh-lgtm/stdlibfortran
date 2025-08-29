@@ -116,7 +116,7 @@ jobs:
       run: |
         set -euxo pipefail
         export FFLAGS="${FFLAGS:-} -fno-fast-math -fno-unsafe-math-optimizations -fprotect-parens"
-        pytest -k test_intrinsics_pathological -vv --maxfail=1
+        ctest --test-dir ${{ env.BUILD_DIR }} -R "intrinsics_pathological" -V --output-on-failure
 
     - name: Upload forensics
       if: ${{ always() && contains(matrix.build, 'cmake') }}
