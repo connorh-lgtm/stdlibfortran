@@ -116,6 +116,13 @@ else()
   set(fyppFlags "-DVERSION90")
 endif()
 
+option(BUILD_OPTIMIZATION_TESTS "Build tests with multiple optimization levels" OFF)
+
+# Cross-optimization testing configurations
+if(BUILD_OPTIMIZATION_TESTS)
+  set(OPTIMIZATION_LEVELS "O0;O2;O3" CACHE STRING "Optimization levels for cross-testing")
+endif()
+
 list(
   APPEND fyppFlags
   "-DWITH_CBOOL=$<BOOL:${WITH_CBOOL}>"
