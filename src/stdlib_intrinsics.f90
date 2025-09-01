@@ -648,6 +648,60 @@ module stdlib_intrinsics
     end interface
     public :: stdlib_dot_product_kahan
 
+    interface stdlib_sum_adaptive
+        !! version: experimental 
+        !!
+        !!### Summary 
+        !! Adaptive sum of rank 1 arrays with automatic algorithm selection.
+        !! ([Specification](../page/specs/stdlib_intrinsics.html#stdlib_sum_adaptive))
+        !!
+        !!### Description
+        !! 
+        !! This interface provides adaptive summation that automatically selects
+        !! the optimal algorithm based on input characteristics. For arrays with
+        !! extreme magnitude ratios (>10^10), it uses pairwise summation to
+        !! minimize error growth. For normal arrays, it uses optimized Kahan summation.
+        !! Supported data types include `real` and `complex`.
+        !!
+        pure module function stdlib_sum_adaptive_1d_sp(a) result(s)
+            real(sp), intent(in) :: a(:)
+            real(sp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_sp_mask(a,mask) result(s)
+            real(sp), intent(in) :: a(:)
+            logical, intent(in) :: mask(:)
+            real(sp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_dp(a) result(s)
+            real(dp), intent(in) :: a(:)
+            real(dp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_dp_mask(a,mask) result(s)
+            real(dp), intent(in) :: a(:)
+            logical, intent(in) :: mask(:)
+            real(dp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_csp(a) result(s)
+            complex(sp), intent(in) :: a(:)
+            complex(sp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_csp_mask(a,mask) result(s)
+            complex(sp), intent(in) :: a(:)
+            logical, intent(in) :: mask(:)
+            complex(sp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_cdp(a) result(s)
+            complex(dp), intent(in) :: a(:)
+            complex(dp) :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_cdp_mask(a,mask) result(s)
+            complex(dp), intent(in) :: a(:)
+            logical, intent(in) :: mask(:)
+            complex(dp) :: s
+        end function
+    end interface
+    public :: stdlib_sum_adaptive
+
     interface kahan_kernel 
         module procedure :: kahan_kernel_sp
         module procedure :: kahan_kernel_m_sp

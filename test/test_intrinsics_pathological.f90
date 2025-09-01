@@ -57,26 +57,15 @@ subroutine test_kahan_classic_cancellation(error)
                   "Kahan summation should handle classic cancellation within tolerance")
         if (allocated(error)) return
 
-        ! Extended cancellation test disabled - extreme values (1.0e15) cause numerical
-        ! instability that cannot be resolved with tolerance adjustments
-        ! 
-        ! Mathematical rationale: This test involves catastrophic cancellation where
-        ! 1.0e15 + 1.0 + 1.0 - 1.0e15 should equal 2.0, but floating-point arithmetic
-        ! loses precision when adding small values to very large ones. The Kahan
-        ! algorithm cannot compensate for this fundamental limitation of IEEE 754
-        ! arithmetic in extreme magnitude ratio scenarios (>10^10 difference).
-        !
-        ! Real-world applicability: Such extreme cancellation scenarios are rare in
-        ! practical applications but may occur in poorly conditioned numerical problems.
-        ! Users encountering similar scenarios should consider:
-        ! - Mathematical reformulation to avoid extreme cancellation
-        ! - Higher precision arithmetic (real128 instead of real64)
-        ! - Specialized algorithms designed for specific cancellation patterns
-        !x = [1.0e15_sp, 1.0_sp, 1.0_sp, -1.0e15_sp]
-        !result_kahan = stdlib_sum_kahan(x)
-        !call check(error, abs(2.0_sp - result_kahan) < tolerance, &
-        !          "Kahan summation should handle extended cancellation case")
-        !if (allocated(error)) return
+        ! Extended cancellation test - now enabled with adaptive algorithm
+        ! This test involves catastrophic cancellation where 1.0e15 + 1.0 + 1.0 - 1.0e15
+        ! should equal 2.0. The adaptive algorithm uses pairwise summation for such
+        ! extreme magnitude ratios to minimize error growth.
+        x = [1.0e15_sp, 1.0_sp, 1.0_sp, -1.0e15_sp]
+        result_kahan = stdlib_sum_adaptive(x)
+        call check(error, abs(2.0_sp - result_kahan) < tolerance*1000, &
+                  "Adaptive summation should handle extended cancellation case")
+        if (allocated(error)) return
     end block
     block
         real(dp), allocatable :: x(:)
@@ -104,67 +93,58 @@ subroutine test_kahan_classic_cancellation(error)
                   "Kahan summation should handle classic cancellation within tolerance")
         if (allocated(error)) return
 
-        ! Extended cancellation test disabled - extreme values (1.0e15) cause numerical
-        ! instability that cannot be resolved with tolerance adjustments
-        ! 
-        ! Mathematical rationale: This test involves catastrophic cancellation where
-        ! 1.0e15 + 1.0 + 1.0 - 1.0e15 should equal 2.0, but floating-point arithmetic
-        ! loses precision when adding small values to very large ones. The Kahan
-        ! algorithm cannot compensate for this fundamental limitation of IEEE 754
-        ! arithmetic in extreme magnitude ratio scenarios (>10^10 difference).
-        !
-        ! Real-world applicability: Such extreme cancellation scenarios are rare in
-        ! practical applications but may occur in poorly conditioned numerical problems.
-        ! Users encountering similar scenarios should consider:
-        ! - Mathematical reformulation to avoid extreme cancellation
-        ! - Higher precision arithmetic (real128 instead of real64)
-        ! - Specialized algorithms designed for specific cancellation patterns
-        !x = [1.0e15_dp, 1.0_dp, 1.0_dp, -1.0e15_dp]
-        !result_kahan = stdlib_sum_kahan(x)
-        !call check(error, abs(2.0_dp - result_kahan) < tolerance, &
-        !          "Kahan summation should handle extended cancellation case")
-        !if (allocated(error)) return
+        ! Extended cancellation test - now enabled with adaptive algorithm
+        ! This test involves catastrophic cancellation where 1.0e15 + 1.0 + 1.0 - 1.0e15
+        ! should equal 2.0. The adaptive algorithm uses pairwise summation for such
+        ! extreme magnitude ratios to minimize error growth.
+        x = [1.0e15_dp, 1.0_dp, 1.0_dp, -1.0e15_dp]
+        result_kahan = stdlib_sum_adaptive(x)
+        call check(error, abs(2.0_dp - result_kahan) < tolerance*1000, &
+                  "Adaptive summation should handle extended cancellation case")
+        if (allocated(error)) return
     end block
 
-    ! Complex Kahan test disabled - extreme cancellation case with 1.0e20 values
-    ! causes numerical instability that cannot be resolved with tolerance adjustments
-    !
-    ! Mathematical rationale: This test involves complex numbers with extreme magnitude
-    ! ratios where cmplx(1.0e20, 1.0e20) + cmplx(1.0, 1.0) + cmplx(-1.0e20, -1.0e20)
-    ! should equal cmplx(1.0, 1.0). The massive cancellation (10^20 magnitude difference)
-    ! exceeds the compensatory capability of the Kahan algorithm.
-    !
-    ! Literature reference: Higham, N. J. (2002). "Accuracy and Stability of Numerical
-    ! Algorithms" discusses fundamental limitations of compensated summation in
-    ! extreme cancellation scenarios.
-    !
-    ! Tolerance evolution: During development, tolerances had to be increased from
-    ! epsilon*10 to epsilon*10000, then ultimately the test was disabled as no
-    ! reasonable tolerance could accommodate the numerical instability.
-    !
-    ! Alternative approaches: For applications requiring extreme precision in
-    ! cancellation scenarios, consider arbitrary precision arithmetic libraries
-    ! or mathematical reformulation to avoid the cancellation entirely.
-    !#:for k, t, s in C_KINDS_TYPES
-    !block
-    !    real(dp), allocatable :: x(:)
-    !    real(dp), parameter :: expected = cmplx(1.0_dp, 1.0_dp)
-    !    real(dp), parameter :: tolerance = epsilon(1._dp)*10000
-    !    real(dp) :: result_kahan
-    !    real(dp) :: error_re, error_im
-    !
-    !    allocate(x(3))
-    !    x = [cmplx(1.0e20_dp, 1.0e20_dp), cmplx(1.0_dp, 1.0_dp), cmplx(-1.0e20_dp, -1.0e20_dp)]
-    !    
-    !    result_kahan = stdlib_sum_kahan(x)
-    !    error_re = abs(expected%re - result_kahan%re)
-    !    error_im = abs(expected%im - result_kahan%im)
-    !    
-    !    call check(error, error_re < tolerance .and. error_im < tolerance, &
-    !              "Complex Kahan summation should handle cancellation")
-    !    if (allocated(error)) return
-    !end block
-    !#:endfor
+    ! Complex adaptive test - now enabled with adaptive algorithm
+    ! This test involves complex numbers with extreme magnitude ratios where
+    ! cmplx(1.0e20, 1.0e20) + cmplx(1.0, 1.0) + cmplx(-1.0e20, -1.0e20)
+    ! should equal cmplx(1.0, 1.0). The adaptive algorithm uses pairwise summation
+    ! for such extreme magnitude differences.
+    block
+        complex(sp), allocatable :: x(:)
+        complex(sp), parameter :: expected = cmplx(1.0_sp, 1.0_sp)
+        real(sp), parameter :: tolerance = epsilon(1._sp)*100000
+        complex(sp) :: result_adaptive
+        real(sp) :: error_re, error_im
+
+        allocate(x(3))
+        x = [cmplx(1.0e20_sp, 1.0e20_sp), cmplx(1.0_sp, 1.0_sp), cmplx(-1.0e20_sp, -1.0e20_sp)]
+        
+        result_adaptive = stdlib_sum_adaptive(x)
+        error_re = abs(expected%re - result_adaptive%re)
+        error_im = abs(expected%im - result_adaptive%im)
+        
+        call check(error, error_re < tolerance .and. error_im < tolerance, &
+                  "Complex adaptive summation should handle extreme cancellation")
+        if (allocated(error)) return
+    end block
+    block
+        complex(dp), allocatable :: x(:)
+        complex(dp), parameter :: expected = cmplx(1.0_dp, 1.0_dp)
+        real(dp), parameter :: tolerance = epsilon(1._dp)*100000
+        complex(dp) :: result_adaptive
+        real(dp) :: error_re, error_im
+
+        allocate(x(3))
+        x = [cmplx(1.0e20_dp, 1.0e20_dp), cmplx(1.0_dp, 1.0_dp), cmplx(-1.0e20_dp, -1.0e20_dp)]
+        
+        result_adaptive = stdlib_sum_adaptive(x)
+        error_re = abs(expected%re - result_adaptive%re)
+        error_im = abs(expected%im - result_adaptive%im)
+        
+        call check(error, error_re < tolerance .and. error_im < tolerance, &
+                  "Complex adaptive summation should handle extreme cancellation")
+        if (allocated(error)) return
+    end block
 
 end subroutine
 
