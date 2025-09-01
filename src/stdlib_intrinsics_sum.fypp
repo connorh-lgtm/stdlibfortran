@@ -11,6 +11,7 @@ submodule(stdlib_intrinsics) stdlib_intrinsics_sum
     implicit none
 
     integer, parameter :: ilp = int64
+    integer(ilp), parameter :: optimal_chunk = 64_ilp
     
 contains
 
@@ -18,99 +19,250 @@ contains
 ! This implementation is based on https://github.com/jalvesz/fast_math
 #:for k, t, s in I_KINDS_TYPES + R_KINDS_TYPES + C_KINDS_TYPES
 pure module function stdlib_sum_1d_${s}$(a) result(s)
-    integer(ilp), parameter :: chunk = 64
     ${t}$, intent(in) :: a(:)
     ${t}$ :: s
-    ${t}$ :: abatch(chunk)
+    ${t}$ :: abatch(optimal_chunk)
     integer(ilp) :: i, n, r
     ! -----------------------------
     n = size(a,kind=ilp)
-    r = mod(n,chunk)
+    r = mod(n,optimal_chunk)
     
     abatch(1:r)       = a(1:r)
-    abatch(r+1:chunk) = zero_${s}$
-    do i = r+1, n-r, chunk
-     abatch(1:chunk) = abatch(1:chunk) + a(i:i+chunk-1)
+    abatch(r+1:optimal_chunk) = zero_${s}$
+    do i = r+1, n-r, optimal_chunk
+     abatch(1:optimal_chunk) = abatch(1:optimal_chunk) + a(i:i+optimal_chunk-1)
     end do
 
     s = zero_${s}$
-    do i = 1, chunk/2
-      s = s + abatch(i)+abatch(chunk/2+i)
+    do i = 1, optimal_chunk/2
+      s = s + abatch(i)+abatch(optimal_chunk/2+i)
     end do
 end function
 
 pure module function stdlib_sum_1d_${s}$_mask(a,mask) result(s)
-    integer(ilp), parameter :: chunk = 64
     ${t}$, intent(in) :: a(:)
     logical, intent(in) :: mask(:)
     ${t}$ :: s
-    ${t}$ :: abatch(chunk)
+    ${t}$ :: abatch(optimal_chunk)
     integer(ilp) :: i, n, r
     ! -----------------------------
     n = size(a,kind=ilp)
-    r = mod(n,chunk)
+    r = mod(n,optimal_chunk)
 
     abatch(1:r)       = merge( zero_${s}$ , a(1:r) , mask(1:r) )
-    abatch(r+1:chunk) = zero_${s}$
-    do i = r+1, n-r, chunk
-        abatch(1:chunk) = abatch(1:chunk) + merge( zero_${s}$ , a(i:i+chunk-1), mask(i:i+chunk-1) )
+    abatch(r+1:optimal_chunk) = zero_${s}$
+    do i = r+1, n-r, optimal_chunk
+        abatch(1:optimal_chunk) = abatch(1:optimal_chunk) + merge( zero_${s}$ , a(i:i+optimal_chunk-1), mask(i:i+optimal_chunk-1) )
     end do
     
     s = zero_${s}$
-    do i = 1, chunk/2
-        s = s + abatch(i)+abatch(chunk/2+i)
+    do i = 1, optimal_chunk/2
+        s = s + abatch(i)+abatch(optimal_chunk/2+i)
     end do
 end function
 #:endfor
 
 #:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
 pure module function stdlib_sum_kahan_1d_${s}$(a) result(s)
-    integer(ilp), parameter :: chunk = 64
     ${t}$, intent(in) :: a(:)
     ${t}$ :: s
-    ${t}$ :: sbatch(chunk)
-    ${t}$ :: cbatch(chunk)
+    ${t}$ :: sbatch(optimal_chunk)
+    ${t}$ :: cbatch(optimal_chunk)
     integer(ilp) :: i, n, r
     ! -----------------------------
     n = size(a,kind=ilp)
-    r = mod(n,chunk)
+    r = mod(n,optimal_chunk)
 
     sbatch(1:r) = a(1:r)
-    sbatch(r+1:chunk)  = zero_${s}$
+    sbatch(r+1:optimal_chunk)  = zero_${s}$
     cbatch = zero_${s}$
-    do i = r+1, n-r, chunk
-      call kahan_kernel( a(i:i+chunk-1) , sbatch(1:chunk) , cbatch(1:chunk) )
+    do i = r+1, n-r, optimal_chunk
+      call kahan_kernel( a(i:i+optimal_chunk-1) , sbatch(1:optimal_chunk) , cbatch(1:optimal_chunk) )
     end do 
 
     s = zero_${s}$
-    do i = 1,chunk
+    do i = 1,optimal_chunk
         call kahan_kernel( sbatch(i) , s , cbatch(i) )
     end do
 end function
 
 pure module function stdlib_sum_kahan_1d_${s}$_mask(a,mask) result(s)
-    integer(ilp), parameter :: chunk = 64
     ${t}$, intent(in) :: a(:)
     logical, intent(in) :: mask(:)
     ${t}$ :: s
-    ${t}$ :: sbatch(chunk)
-    ${t}$ :: cbatch(chunk)
+    ${t}$ :: sbatch(optimal_chunk)
+    ${t}$ :: cbatch(optimal_chunk)
     integer(ilp) :: i, n, r
     ! -----------------------------
     n = size(a,kind=ilp)
-    r = mod(n,chunk)
+    r = mod(n,optimal_chunk)
     
     sbatch(1:r) = merge( zero_${s}$ , a(1:r) , mask(1:r) )
-    sbatch(r+1:chunk)  = zero_${s}$
+    sbatch(r+1:optimal_chunk)  = zero_${s}$
     cbatch = zero_${s}$
-    do i = r+1, n-r, chunk
-      call kahan_kernel( a(i:i+chunk-1) , sbatch(1:chunk) , cbatch(1:chunk), mask(i:i+chunk-1) )
+    do i = r+1, n-r, optimal_chunk
+      call kahan_kernel( a(i:i+optimal_chunk-1) , sbatch(1:optimal_chunk) , cbatch(1:optimal_chunk), mask(i:i+optimal_chunk-1) )
     end do 
 
     s = zero_${s}$
-    do i = 1,chunk
+    do i = 1,optimal_chunk
         call kahan_kernel( sbatch(i) , s , cbatch(i) )
     end do
+end function
+#:endfor
+
+!================= Pairwise summation for extreme cases ============
+#:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
+pure recursive function stdlib_sum_pairwise_1d_${s}$(a, start_idx, end_idx) result(s)
+    ${t}$, intent(in) :: a(:)
+    integer(ilp), intent(in) :: start_idx, end_idx
+    ${t}$ :: s
+    integer(ilp) :: mid, n
+    
+    n = end_idx - start_idx + 1
+    if (n <= 4) then
+        ! For small arrays, use specialized extreme cancellation handling
+        s = stdlib_sum_extreme_cancellation_${s}$(a(start_idx:end_idx))
+    else
+        mid = start_idx + n / 2 - 1
+        s = stdlib_sum_pairwise_1d_${s}$(a, start_idx, mid) + &
+            stdlib_sum_pairwise_1d_${s}$(a, mid + 1, end_idx)
+    end if
+end function
+
+pure function stdlib_sum_extreme_cancellation_${s}$(a) result(s)
+    ${t}$, intent(in) :: a(:)
+    ${t}$ :: s
+    integer :: n, i, j
+    ${t}$, allocatable :: temp(:)
+    logical, allocatable :: used(:)
+    real(${k}$) :: abs_vals(size(a))
+    integer :: sorted_indices(size(a))
+    
+    n = size(a)
+    if (n == 0) then
+        s = zero_${s}$
+        return
+    end if
+    
+    if (n == 1) then
+        s = a(1)
+        return
+    end if
+    
+    ! For small arrays, try to pair canceling values first
+    allocate(temp(n), used(n))
+    temp = a
+    used = .false.
+    
+    ! Calculate absolute values for sorting
+    do i = 1, n
+        abs_vals(i) = abs(a(i))
+    end do
+    
+    ! Simple sorting by magnitude (bubble sort for small arrays)
+    do i = 1, n
+        sorted_indices(i) = i
+    end do
+    do i = 1, n-1
+        do j = i+1, n
+            if (abs_vals(sorted_indices(i)) < abs_vals(sorted_indices(j))) then
+                ! Swap indices
+                call swap_indices(sorted_indices(i), sorted_indices(j))
+            end if
+        end do
+    end do
+    
+    ! Try to find canceling pairs among largest values first
+    s = zero_${s}$
+    do i = 1, n-1
+        if (used(sorted_indices(i))) cycle
+        do j = i+1, n
+            if (used(sorted_indices(j))) cycle
+            ! Check if values approximately cancel
+            if (abs(temp(sorted_indices(i)) + temp(sorted_indices(j))) < &
+                abs(temp(sorted_indices(i))) * 1.0e-10_${k}$) then
+                s = s + (temp(sorted_indices(i)) + temp(sorted_indices(j)))
+                used(sorted_indices(i)) = .true.
+                used(sorted_indices(j)) = .true.
+                exit
+            end if
+        end do
+    end do
+    
+    ! Add remaining unpaired values
+    do i = 1, n
+        if (.not. used(sorted_indices(i))) then
+            s = s + temp(sorted_indices(i))
+        end if
+    end do
+    
+contains
+    pure subroutine swap_indices(a, b)
+        integer, intent(inout) :: a, b
+        integer :: temp_idx
+        temp_idx = a
+        a = b
+        b = temp_idx
+    end subroutine
+end function
+
+pure function detect_extreme_magnitude_ratio_${s}$(a) result(is_extreme)
+    ${t}$, intent(in) :: a(:)
+    logical :: is_extreme
+    real(${k}$) :: max_val, min_val, ratio
+    real(${k}$), parameter :: extreme_threshold = 1.0e10_${k}$
+    real(${k}$) :: abs_vals(size(a))
+    integer :: i
+    
+    ! Calculate absolute values for both real and complex
+    do i = 1, size(a)
+        abs_vals(i) = abs(a(i))
+    end do
+    
+    max_val = maxval(abs_vals)
+    min_val = minval(abs_vals, mask=abs_vals > tiny(1.0_${k}$))
+    if (min_val <= tiny(1.0_${k}$)) then
+        min_val = tiny(1.0_${k}$)
+    end if
+    ratio = max_val / min_val
+    is_extreme = ratio > extreme_threshold
+end function
+
+pure module function stdlib_sum_adaptive_1d_${s}$(a) result(s)
+    ${t}$, intent(in) :: a(:)
+    ${t}$ :: s
+    
+    if (detect_extreme_magnitude_ratio_${s}$(a)) then
+        s = stdlib_sum_pairwise_1d_${s}$(a, 1_ilp, size(a, kind=ilp))
+    else
+        s = stdlib_sum_kahan(a)
+    end if
+end function
+
+pure module function stdlib_sum_adaptive_1d_${s}$_mask(a, mask) result(s)
+    ${t}$, intent(in) :: a(:)
+    logical, intent(in) :: mask(:)
+    ${t}$ :: s
+    ${t}$, allocatable :: masked_a(:)
+    integer(ilp) :: i, count_true
+    
+    count_true = count(mask)
+    if (count_true == 0) then
+        s = zero_${s}$
+        return
+    end if
+    
+    allocate(masked_a(count_true))
+    count_true = 0
+    do i = 1, size(a)
+        if (mask(i)) then
+            count_true = count_true + 1
+            masked_a(count_true) = a(i)
+        end if
+    end do
+    
+    s = stdlib_sum_adaptive_1d_${s}$(masked_a)
 end function
 #:endfor
 
