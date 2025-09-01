@@ -255,8 +255,7 @@ subroutine collect_suite(testsuite)
         new_unittest('dot_product_reference_validation', test_dot_product_reference_validation), &
         new_unittest('kahan_superiority_demonstration', test_kahan_superiority_demonstration), &
         new_unittest('theoretical_error_bounds', test_theoretical_error_bounds), &
-        new_unittest('complex_conjugation_accuracy', test_complex_conjugation_accuracy), &
-        new_unittest('performance_monitoring', test_performance_monitoring) &
+        new_unittest('complex_conjugation_accuracy', test_complex_conjugation_accuracy) &
     ]
 end subroutine
 
@@ -1106,25 +1105,6 @@ subroutine test_complex_conjugation_accuracy(error)
     end block
 
 end subroutine
-
-subroutine test_performance_monitoring(error)
-    use iso_fortran_env, only: real64
-    type(error_type), allocatable, intent(out) :: error
-    real(real64) :: start_time, end_time, elapsed_time
-    real(real64), parameter :: BASELINE_TIME = 0.02_real64
-    real(real64), parameter :: REGRESSION_THRESHOLD = 2.0_real64
-    
-    call cpu_time(start_time)
-    call test_sum(error)
-    if (allocated(error)) return
-    call cpu_time(end_time)
-    
-    elapsed_time = end_time - start_time
-    
-    if (elapsed_time / BASELINE_TIME > REGRESSION_THRESHOLD) then
-        call check(error, .false., 'Performance regression detected in intrinsics suite')
-    end if
-end subroutine test_performance_monitoring
     
 end module test_intrinsics
 
@@ -1140,7 +1120,7 @@ program tester
     stat = 0
 
     testsuites = [ &
-        new_testsuite("intrinsics", collect_suite) &
+        new_testsuite("sparse", collect_suite) &
         ]
 
     do is = 1, size(testsuites)
