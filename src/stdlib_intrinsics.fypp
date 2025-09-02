@@ -180,21 +180,25 @@ contains
 
 #:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
 #ifdef __INTEL_COMPILER
-!DIR$ OPTIMIZE:0
+!DEC$ NOFUSION
+!DEC$ NOVECTOR
 #endif
 elemental subroutine kahan_kernel_${s}$(a,s,c)
     ${t}$, intent(in) :: a
     ${t}$, intent(inout) :: s
     ${t}$, intent(inout) :: c
     ${t}$ :: t, y
+#ifdef __INTEL_COMPILER
+!DEC$ NOFUSION
+#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = t
 end subroutine  
 #ifdef __INTEL_COMPILER
-!DIR$ OPTIMIZE:3
-!DIR$ OPTIMIZE:0
+!DEC$ NOFUSION
+!DEC$ NOVECTOR
 #endif
 elemental subroutine kahan_kernel_m_${s}$(a,s,c,m)
     ${t}$, intent(in) :: a
@@ -202,14 +206,14 @@ elemental subroutine kahan_kernel_m_${s}$(a,s,c,m)
     ${t}$, intent(inout) :: c
     logical, intent(in) :: m
     ${t}$ :: t, y
+#ifdef __INTEL_COMPILER
+!DEC$ NOFUSION
+#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
-#ifdef __INTEL_COMPILER
-!DIR$ OPTIMIZE:3
-#endif
 #:endfor
 
 end module stdlib_intrinsics
