@@ -716,6 +716,9 @@ module stdlib_intrinsics
     
 contains
 
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_sp(a,s,c)
     real(sp), intent(in) :: a
     real(sp), intent(inout) :: s
@@ -726,6 +729,10 @@ elemental subroutine kahan_kernel_sp(a,s,c)
     c = (t - s) - y
     s = t
 end subroutine  
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_m_sp(a,s,c,m)
     real(sp), intent(in) :: a
     real(sp), intent(inout) :: s
@@ -737,6 +744,12 @@ elemental subroutine kahan_kernel_m_sp(a,s,c,m)
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+#endif
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_dp(a,s,c)
     real(dp), intent(in) :: a
     real(dp), intent(inout) :: s
@@ -747,6 +760,10 @@ elemental subroutine kahan_kernel_dp(a,s,c)
     c = (t - s) - y
     s = t
 end subroutine  
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_m_dp(a,s,c,m)
     real(dp), intent(in) :: a
     real(dp), intent(inout) :: s
@@ -758,6 +775,12 @@ elemental subroutine kahan_kernel_m_dp(a,s,c,m)
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+#endif
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_csp(a,s,c)
     complex(sp), intent(in) :: a
     complex(sp), intent(inout) :: s
@@ -768,6 +791,10 @@ elemental subroutine kahan_kernel_csp(a,s,c)
     c = (t - s) - y
     s = t
 end subroutine  
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_m_csp(a,s,c,m)
     complex(sp), intent(in) :: a
     complex(sp), intent(inout) :: s
@@ -779,6 +806,12 @@ elemental subroutine kahan_kernel_m_csp(a,s,c,m)
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+#endif
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_cdp(a,s,c)
     complex(dp), intent(in) :: a
     complex(dp), intent(inout) :: s
@@ -789,6 +822,10 @@ elemental subroutine kahan_kernel_cdp(a,s,c)
     c = (t - s) - y
     s = t
 end subroutine  
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_m_cdp(a,s,c,m)
     complex(dp), intent(in) :: a
     complex(dp), intent(inout) :: s
@@ -800,5 +837,8 @@ elemental subroutine kahan_kernel_m_cdp(a,s,c,m)
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+#endif
 
 end module stdlib_intrinsics
