@@ -179,6 +179,9 @@ module stdlib_intrinsics
 contains
 
 #:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_${s}$(a,s,c)
     ${t}$, intent(in) :: a
     ${t}$, intent(inout) :: s
@@ -189,6 +192,10 @@ elemental subroutine kahan_kernel_${s}$(a,s,c)
     c = (t - s) - y
     s = t
 end subroutine  
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+!DIR$ OPTIMIZE:0
+#endif
 elemental subroutine kahan_kernel_m_${s}$(a,s,c,m)
     ${t}$, intent(in) :: a
     ${t}$, intent(inout) :: s
@@ -200,6 +207,9 @@ elemental subroutine kahan_kernel_m_${s}$(a,s,c,m)
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
+#ifdef __INTEL_COMPILER
+!DIR$ OPTIMIZE:3
+#endif
 #:endfor
 
 end module stdlib_intrinsics
