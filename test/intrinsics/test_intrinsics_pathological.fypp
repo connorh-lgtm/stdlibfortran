@@ -62,36 +62,43 @@ subroutine test_kahan_classic_cancellation(error)
                   "Kahan summation should handle classic cancellation within tolerance")
         if (allocated(error)) return
 
+        ! Extended cancellation test - now enabled with adaptive algorithm
+        ! This test involves catastrophic cancellation where 1.0e15 + 1.0 + 1.0 - 1.0e15
+        ! should equal 2.0. The adaptive algorithm uses pairwise summation for such
+        ! extreme magnitude ratios to minimize error growth.
         x = [1.0e15_${k}$, 1.0_${k}$, 1.0_${k}$, -1.0e15_${k}$]
-        result_kahan = stdlib_sum_kahan(x)
-        call check(error, abs(2.0_${k}$ - result_kahan) < tolerance * 1000, &
-                  "Kahan summation should handle extended cancellation case")
+        result_kahan = stdlib_sum_adaptive(x)
+        call check(error, abs(2.0_${k}$ - result_kahan) < tolerance*1000, &
+                  "Adaptive summation should handle extended cancellation case")
         if (allocated(error)) return
     end block
     #:endfor
 
-    ! Complex Kahan test disabled - extreme cancellation case with 1.0e20 values
-    ! causes numerical instability that cannot be resolved with tolerance adjustments
-    !#:for k, t, s in C_KINDS_TYPES
-    !block
-    !    ${t}$, allocatable :: x(:)
-    !    ${t}$, parameter :: expected = cmplx(1.0_${k}$, 1.0_${k}$)
-    !    real(${k}$), parameter :: tolerance = epsilon(1._${k}$)*10000000
-    !    ${t}$ :: result_kahan
-    !    real(${k}$) :: error_re, error_im
-    !
-    !    allocate(x(3))
-    !    x = [cmplx(1.0e20_${k}$, 1.0e20_${k}$), cmplx(1.0_${k}$, 1.0_${k}$), cmplx(-1.0e20_${k}$, -1.0e20_${k}$)]
-    !    
-    !    result_kahan = stdlib_sum_kahan(x)
-    !    error_re = abs(expected%re - result_kahan%re)
-    !    error_im = abs(expected%im - result_kahan%im)
-    !    
-    !    call check(error, error_re < tolerance .and. error_im < tolerance, &
-    !              "Complex Kahan summation should handle cancellation")
-    !    if (allocated(error)) return
-    !end block
-    !#:endfor
+    ! Complex adaptive test - now enabled with adaptive algorithm
+    ! This test involves complex numbers with extreme magnitude ratios where
+    ! cmplx(1.0e20, 1.0e20) + cmplx(1.0, 1.0) + cmplx(-1.0e20, -1.0e20)
+    ! should equal cmplx(1.0, 1.0). The adaptive algorithm uses pairwise summation
+    ! for such extreme magnitude differences.
+    #:for k, t, s in C_KINDS_TYPES
+    block
+        ${t}$, allocatable :: x(:)
+        ${t}$, parameter :: expected = cmplx(1.0_${k}$, 1.0_${k}$)
+        real(${k}$), parameter :: tolerance = epsilon(1._${k}$)*100000
+        ${t}$ :: result_adaptive
+        real(${k}$) :: error_re, error_im
+
+        allocate(x(3))
+        x = [cmplx(1.0e20_${k}$, 1.0e20_${k}$), cmplx(1.0_${k}$, 1.0_${k}$), cmplx(-1.0e20_${k}$, -1.0e20_${k}$)]
+        
+        result_adaptive = stdlib_sum_adaptive(x)
+        error_re = abs(expected%re - result_adaptive%re)
+        error_im = abs(expected%im - result_adaptive%im)
+        
+        call check(error, error_re < tolerance .and. error_im < tolerance, &
+                  "Complex adaptive summation should handle extreme cancellation")
+        if (allocated(error)) return
+    end block
+    #:endfor
 
 end subroutine
 

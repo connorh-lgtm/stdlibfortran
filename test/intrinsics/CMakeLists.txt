@@ -38,3 +38,8 @@ set_tests_properties(intrinsics intrinsics_pathological intrinsics_accuracy
                      PROPERTIES 
                      TIMEOUT 300
                      RESOURCE_LOCK memory_intensive)
+
+# Performance testing from master
+add_executable(test_intrinsics_performance test_intrinsics_performance.f90)
+target_link_libraries(test_intrinsics_performance PRIVATE fortran_stdlib)
+add_test(NAME intrinsics_performance COMMAND test_intrinsics_performance)
