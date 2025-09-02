@@ -139,6 +139,35 @@ module stdlib_intrinsics
     end interface
     public :: stdlib_dot_product_kahan
 
+    interface stdlib_sum_adaptive
+        !! version: experimental 
+        !!
+        !!### Summary 
+        !! Adaptive sum of rank 1 arrays with automatic algorithm selection.
+        !! ([Specification](../page/specs/stdlib_intrinsics.html#stdlib_sum_adaptive))
+        !!
+        !!### Description
+        !! 
+        !! This interface provides adaptive summation that automatically selects
+        !! the optimal algorithm based on input characteristics. For arrays with
+        !! extreme magnitude ratios (>10^10), it uses pairwise summation to
+        !! minimize error growth. For normal arrays, it uses optimized Kahan summation.
+        !! Supported data types include `real` and `complex`.
+        !!
+        #:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
+        pure module function stdlib_sum_adaptive_1d_${s}$(a) result(s)
+            ${t}$, intent(in) :: a(:)
+            ${t}$ :: s
+        end function
+        pure module function stdlib_sum_adaptive_1d_${s}$_mask(a,mask) result(s)
+            ${t}$, intent(in) :: a(:)
+            logical, intent(in) :: mask(:)
+            ${t}$ :: s
+        end function
+        #:endfor
+    end interface
+    public :: stdlib_sum_adaptive
+
     interface kahan_kernel 
         #:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
         module procedure :: kahan_kernel_${s}$
@@ -150,22 +179,36 @@ module stdlib_intrinsics
 contains
 
 #:for k, t, s in R_KINDS_TYPES + C_KINDS_TYPES
+#ifdef __INTEL_COMPILER
+!DEC$ NOFUSION
+!DEC$ NOVECTOR
+#endif
 elemental subroutine kahan_kernel_${s}$(a,s,c)
     ${t}$, intent(in) :: a
     ${t}$, intent(inout) :: s
     ${t}$, intent(inout) :: c
     ${t}$ :: t, y
+#ifdef __INTEL_COMPILER
+!DEC$ NOFUSION
+#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = t
 end subroutine  
+#ifdef __INTEL_COMPILER
+!DEC$ NOFUSION
+!DEC$ NOVECTOR
+#endif
 elemental subroutine kahan_kernel_m_${s}$(a,s,c,m)
     ${t}$, intent(in) :: a
     ${t}$, intent(inout) :: s
     ${t}$, intent(inout) :: c
     logical, intent(in) :: m
     ${t}$ :: t, y
+#ifdef __INTEL_COMPILER
+!DEC$ NOFUSION
+#endif
     y = a - c
     t = s + y
     c = (t - s) - y
