@@ -716,141 +716,109 @@ module stdlib_intrinsics
     
 contains
 
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_sp(a,s,c)
     real(sp), intent(in) :: a
     real(sp), intent(inout) :: s
     real(sp), intent(inout) :: c
     real(sp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = t
 end subroutine  
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_m_sp(a,s,c,m)
     real(sp), intent(in) :: a
     real(sp), intent(inout) :: s
     real(sp), intent(inout) :: c
     logical, intent(in) :: m
     real(sp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_dp(a,s,c)
     real(dp), intent(in) :: a
     real(dp), intent(inout) :: s
     real(dp), intent(inout) :: c
     real(dp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = t
 end subroutine  
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_m_dp(a,s,c,m)
     real(dp), intent(in) :: a
     real(dp), intent(inout) :: s
     real(dp), intent(inout) :: c
     logical, intent(in) :: m
     real(dp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_csp(a,s,c)
     complex(sp), intent(in) :: a
     complex(sp), intent(inout) :: s
     complex(sp), intent(inout) :: c
     complex(sp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = t
 end subroutine  
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_m_csp(a,s,c,m)
     complex(sp), intent(in) :: a
     complex(sp), intent(inout) :: s
     complex(sp), intent(inout) :: c
     logical, intent(in) :: m
     complex(sp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = merge( s , t , m )
 end subroutine 
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_cdp(a,s,c)
     complex(dp), intent(in) :: a
     complex(dp), intent(inout) :: s
     complex(dp), intent(inout) :: c
     complex(dp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
     s = t
 end subroutine  
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
 !DEC$ NOVECTOR
-#endif
 elemental subroutine kahan_kernel_m_cdp(a,s,c,m)
     complex(dp), intent(in) :: a
     complex(dp), intent(inout) :: s
     complex(dp), intent(inout) :: c
     logical, intent(in) :: m
     complex(dp) :: t, y
-#ifdef __INTEL_COMPILER
 !DEC$ NOFUSION
-#endif
     y = a - c
     t = s + y
     c = (t - s) - y
